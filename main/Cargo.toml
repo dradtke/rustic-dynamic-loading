@@ -1,0 +1,13 @@
+[package]
+name = "rustgame"
+version = "0.1.0"
+authors = ["Damien Radtke <damienradtke@gmail.com>"]
+
+[dependencies.game]
+path = "../game"
+
+[dependencies.state]
+path = "../state"
+
+[dependencies.allegro]
+version = "=0.0.18"

@@ -1,0 +1,8 @@
+[package]
+name = "state"
+version = "0.1.0"
+authors = ["Damien Radtke <damienradtke@gmail.com>"]
+
+[lib]
+name = "state"
+crate-type = ["dylib"]
