@@ -1,3 +1,6 @@
+extern crate allegro;
+extern crate allegro_font;
+
 #[no_mangle]
 #[derive(Debug)]
 pub enum State {
@@ -18,4 +21,10 @@ impl Default for State {
             timer: 0,
         }
     }
+}
+
+#[allow(dead_code)]
+pub struct Platform {
+    pub core: allegro::Core,
+    pub font_addon: allegro_font::FontAddon,
 }

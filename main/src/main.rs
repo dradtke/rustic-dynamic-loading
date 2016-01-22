@@ -7,7 +7,7 @@ extern crate dylib;
 
 use allegro_font::FontAddon;
 use dylib::DynamicLibrary;
-use state::State;
+use state::{State, Platform};
 use std::default::Default;
 use std::fs::{self, DirEntry};
 use std::mem;
@@ -21,10 +21,9 @@ const SCREEN_HEIGHT: i32 = 480;
 /// A reference to the game's shared library.
 enum Handle {
     Open {
-        #[allow(dead_code)]
-        lib: DynamicLibrary,
+        #[allow(dead_code)] lib: DynamicLibrary,
         update: fn(State) -> State,
-        render: fn(&allegro::Core, &FontAddon, &State),
+        render: fn(&Platform, &State),
         inode: u64,
     },
     Closed,
@@ -61,9 +60,9 @@ impl Handle {
         }
     }
 
-    fn render(&self, core: &allegro::Core, font_addon: &FontAddon, s: &State) {
+    fn render(&self, p: &Platform, s: &State) {
         match *self {
-            Handle::Open{render, ..} => render(core, font_addon, s),
+            Handle::Open{render, ..} => render(p, s),
             Handle::Closed => (),
         }
     }
@@ -90,14 +89,17 @@ fn find_lib(root: &str) -> Option<PathBuf> {
 
 allegro_main!
 {
-    let mut core = allegro::Core::init().unwrap();
-    let font_addon = FontAddon::init(&core).unwrap();
+    let core = allegro::Core::init().unwrap();
+    let mut platform = Platform {
+        font_addon: FontAddon::init(&core).unwrap(),
+        core: core,
+    };
 
-    let disp = allegro::Display::new(&core, SCREEN_WIDTH, SCREEN_HEIGHT).unwrap();
+    let disp = allegro::Display::new(&platform.core, SCREEN_WIDTH, SCREEN_HEIGHT).unwrap();
     disp.set_window_title("Hello, Allegro!");
 
-    core.install_keyboard().unwrap();
-    core.install_mouse().unwrap();
+    platform.core.install_keyboard().unwrap();
+    platform.core.install_mouse().unwrap();
 
     let so = match find_lib("../game") {
         Some(so) => so,
@@ -107,11 +109,11 @@ allegro_main!
     let mut handle = Handle::open(so.as_path()).unwrap();
     let mut state = Default::default();
 
-    let timer = allegro::Timer::new(&core, 1.0 / FPS).unwrap();
-    let q = allegro::EventQueue::new(&core).unwrap();
+    let timer = allegro::Timer::new(&platform.core, 1.0 / FPS).unwrap();
+    let q = allegro::EventQueue::new(&platform.core).unwrap();
     q.register_event_source(disp.get_event_source());
-    q.register_event_source(core.get_keyboard_event_source());
-    q.register_event_source(core.get_mouse_event_source());
+    q.register_event_source(platform.core.get_keyboard_event_source());
+    q.register_event_source(platform.core.get_mouse_event_source());
     q.register_event_source(timer.get_event_source());
 
     let mut redraw = true;
@@ -119,8 +121,8 @@ allegro_main!
 
     'main: loop {
         if redraw && q.is_empty() {
-            handle.render(&core, &font_addon, &state);
-            core.flip_display();
+            handle.render(&platform, &state);
+            platform.core.flip_display();
             redraw = false;
         }
 

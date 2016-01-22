@@ -5,4 +5,10 @@ authors = ["Damien Radtke <damienradtke@gmail.com>"]
 
 [lib]
 name = "state"
-crate-type = ["dylib"]
+# crate-type = ["dylib"]
+
+[dependencies.allegro]
+version = "=0.0.22"
+
+[dependencies.allegro_font]
+version = "=0.0.22"
