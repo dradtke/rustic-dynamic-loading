@@ -12,3 +12,6 @@ version = "=0.0.22"
 
 [dependencies.allegro_font]
 version = "=0.0.22"
+
+[dependencies.allegro_image]
+version = "=0.0.22"

@@ -2,10 +2,12 @@
 
 #[macro_use] extern crate allegro;
 extern crate allegro_font;
+extern crate allegro_image;
 extern crate state;
 extern crate dylib;
 
 use allegro_font::FontAddon;
+use allegro_image::ImageAddon;
 use dylib::DynamicLibrary;
 use state::{State, Platform};
 use std::default::Default;
@@ -22,8 +24,9 @@ const SCREEN_HEIGHT: i32 = 480;
 enum Handle {
     Open {
         #[allow(dead_code)] lib: DynamicLibrary,
-        update: fn(State) -> State,
+        update: fn(&Platform, State) -> State,
         render: fn(&Platform, &State),
+        clean_up: fn(State),
         inode: u64,
     },
     Closed,
@@ -35,6 +38,7 @@ impl Handle {
             Ok(lib) => Some(Handle::Open{
                 update: unsafe { mem::transmute(lib.symbol::<usize>("update").unwrap()) },
                 render: unsafe { mem::transmute(lib.symbol::<usize>("render").unwrap()) },
+                clean_up: unsafe { mem::transmute(lib.symbol::<usize>("clean_up").unwrap()) },
                 lib: lib,
                 inode: fs::metadata(path).unwrap().as_raw_stat().st_ino,
             }),
@@ -53,9 +57,9 @@ impl Handle {
         *self = Handle::Closed;
     }
 
-    fn update(&self, s: State) -> State {
+    fn update(&self, p: &Platform, s: State) -> State {
         match *self {
-            Handle::Open{update, ..} => update(s),
+            Handle::Open{update, ..} => update(p, s),
             Handle::Closed => s,
         }
     }
@@ -63,6 +67,13 @@ impl Handle {
     fn render(&self, p: &Platform, s: &State) {
         match *self {
             Handle::Open{render, ..} => render(p, s),
+            Handle::Closed => (),
+        }
+    }
+
+    fn clean_up(&self, s: State) {
+        match *self {
+            Handle::Open{clean_up, ..} => clean_up(s),
             Handle::Closed => (),
         }
     }
@@ -91,7 +102,8 @@ allegro_main!
 {
     let core = allegro::Core::init().unwrap();
     let mut platform = Platform {
-        font_addon: FontAddon::init(&core).unwrap(),
+        font_addon: FontAddon::init(&core).unwrap_or_else(|msg| panic!(msg)),
+        image_addon: ImageAddon::init(&core).unwrap_or_else(|msg| panic!(msg)),
         core: core,
     };
 
@@ -150,10 +162,12 @@ allegro_main!
                         _ => (),
                     };
                 }
-                state = handle.update(state);
+                state = handle.update(&platform, state);
                 redraw = true;
             },
             _ => (),
         }
     }
+
+    handle.clean_up(state);
 }

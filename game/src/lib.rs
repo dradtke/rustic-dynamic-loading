@@ -2,17 +2,24 @@ extern crate allegro;
 extern crate allegro_font;
 extern crate state;
 
-mod loading;
+mod states;
+mod util;
 
 use allegro::Color;
 use state::{Platform, State};
+use std::mem;
 
 #[no_mangle]
-#[allow(unused_mut)]
-pub fn update(mut s: State) -> State {
-    match s {
-        State::Loading{ ref mut num_periods, ref mut timer, delay, .. } => loading::update(num_periods, timer, delay),
-    }.unwrap_or(s)
+pub fn update(p: &Platform, mut s: State) -> State {
+    match match s {
+        State::Loading(ref mut detail) => states::loading::update(p, detail),
+        State::GameMap(ref mut detail) => states::game_map::update(p, detail),
+    } {
+        // The old state is technically owned by the main binary, so it needs
+        // to be forgotten here in order to prevent a segfault.
+        Some(x) => { mem::forget(s); x},
+        None => s,
+    }
 }
 
 #[no_mangle]
@@ -20,6 +27,12 @@ pub fn update(mut s: State) -> State {
 pub fn render(p: &Platform, s: &State) {
     p.core.clear_to_color(Color::from_rgb(0, 0, 0));
     match *s {
-        State::Loading{ ref base_text, num_periods, .. } => loading::render(p, base_text, num_periods),
+        State::Loading(ref detail) => states::loading::render(p, detail),
+        State::GameMap(ref detail) => states::game_map::render(p, detail),
     }
+}
+
+#[no_mangle]
+pub fn clean_up(s: State) {
+    mem::forget(s);
 }
