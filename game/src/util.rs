@@ -1,24 +1,35 @@
-use allegro::{BitmapLike, MemoryBitmap, SharedBitmap};
-use state::Spritesheet;
-use std::rc::Rc;
+use allegro::{Core, Bitmap};
+use state::TiledMemoryMap;
+use std::collections::HashMap;
+use std::fs::File;
+use std::path::{Path, PathBuf};
+use tiled;
 
-pub fn parse_spritesheet(bmp: MemoryBitmap, tile_width: usize, tile_height: usize, margin: usize)
-    -> Result<Spritesheet, ()>
-{
-    let image = Rc::new(bmp.into_bitmap().clone());
-    let map_width = (image.get_width() as usize + margin) / (tile_width + 1);
-    let map_height = (image.get_height() as usize + margin) / (tile_height + 1);
-    let mut parts = Vec::with_capacity(map_width * map_height);
-    for y in 0..map_height {
-        for x in 0..map_width {
-            let start_x = (x * (tile_width + margin)) as i32;
-            let start_y = (y * (tile_height + margin)) as i32;
-            let tile = try!(image.create_sub_bitmap(start_x, start_y, tile_width as i32, tile_height as i32));
-            parts.push(tile);
-        }
-    }
-    Ok(Spritesheet{
-        image: image,
-        parts: parts,
-    })
+// TODO: return a Result rather than panic.
+pub fn load_map(core: &Core, filename: &str) -> TiledMemoryMap {
+	let f = match File::open(filename) {
+		Ok(f) => f,
+		Err(e) => panic!("failed to open map file {}: {}", filename, e),
+	};
+	let m = match tiled::parse(f) {
+		Ok(m) => m,
+		Err(e) => panic!("failed to parse map: {}", e),
+	};
+
+	let dir = Path::new(filename).parent().unwrap();
+
+	// Load all of the backing tilesheet images as Allegro memory bitmaps.
+	let mut bitmaps = HashMap::new();
+	for tileset in &m.tilesets {
+		for image in &tileset.images {
+			let mut path = PathBuf::from(dir); path.push(&image.source[..]);
+			let bmp = match Bitmap::load(core, &path.to_string_lossy()).unwrap().into_memory_bitmap() {
+				Ok(x) => x,
+				Err(_) => panic!("failed to convert to memory bitmap"),
+			};
+			bitmaps.insert(image.source.clone(), bmp);
+		}
+	}
+
+	TiledMemoryMap{m: m, bitmaps: bitmaps}
 }

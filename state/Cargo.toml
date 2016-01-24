@@ -15,3 +15,7 @@ version = "=0.0.22"
 
 [dependencies.allegro_image]
 version = "=0.0.22"
+
+[dependencies.tiled]
+# version = "=0.1.4"
+path = "../../rs-tiled"

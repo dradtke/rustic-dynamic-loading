@@ -1,6 +1,7 @@
 extern crate allegro;
 extern crate allegro_font;
 extern crate state;
+extern crate tiled;
 
 mod states;
 mod util;

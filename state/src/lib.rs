@@ -1,8 +1,10 @@
 extern crate allegro;
 extern crate allegro_font;
 extern crate allegro_image;
+extern crate tiled;
 
-use allegro::{Bitmap, MemoryBitmap, SubBitmap};
+use allegro::{Bitmap, MemoryBitmap, SharedBitmap, SubBitmap};
+use std::collections::HashMap;
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
@@ -31,8 +33,8 @@ pub struct LoadingDetail {
     /// Incremented once each frame.
     pub dot_timer: i8,
 
-    pub tiles_recv: Option<Receiver<MemoryBitmap>>,
-    pub tiles: Option<Spritesheet>,
+    pub map_recv: Option<Receiver<TiledMemoryMap>>,
+    pub map: Option<TiledMap>,
 }
 
 impl Default for LoadingDetail {
@@ -44,22 +46,57 @@ impl Default for LoadingDetail {
             dot_max: 3,
             dot_delay: 15,
             dot_timer: 0,
-            tiles_recv: None,
-            tiles: None,
+            map_recv: None,
+            map: None,
         }
     }
 }
 
 #[no_mangle]
 pub struct GameMapDetail {
-    pub tiles: Spritesheet,
+	pub map: TiledMap,
 }
 
-/// The backing bitmap needs to be here so that it's not lost
-/// when this object is passed between states.
-pub struct Spritesheet {
-    pub image: Rc<Bitmap>,
-    pub parts: Vec<SubBitmap>,
+/// Representation of an in-memory Tiled map. This is
+/// usually created in another thread, then sent to
+/// the main one.
+pub struct TiledMemoryMap {
+	pub m: tiled::Map,
+	pub bitmaps: HashMap<String, MemoryBitmap>,
+}
+
+impl TiledMemoryMap {
+	pub fn into_map(self) -> TiledMap {
+		let mut bitmaps = HashMap::new();
+		for (filename, mbmp) in self.bitmaps {
+			bitmaps.insert(filename, Rc::new(mbmp.into_bitmap().clone()));
+		}
+
+		let mut tiles = HashMap::new();
+
+		// TODO: find a more accurate way to make sure all necessary tiles are cached.
+		for gid in 0..1035 {
+			match self.m.get_tileset_by_gid(gid) {
+				Some(tileset) => {
+					let (x, y) = tileset.get_orthogonal_tile_coords(gid).unwrap();
+					let ref image = tileset.images[0];
+					let tile_bmp = bitmaps.get(&image.source).unwrap()
+						.create_sub_bitmap(x as i32, y as i32, tileset.tile_width as i32, tileset.tile_height as i32).unwrap();
+					tiles.insert(gid, tile_bmp);
+					// gid += 1;
+				},
+				None => (),
+			}
+		}
+
+		TiledMap{ m: self.m, bitmaps: bitmaps, tiles: tiles }
+	}
+}
+
+pub struct TiledMap {
+	pub m: tiled::Map,
+	pub bitmaps: HashMap<String, Rc<Bitmap>>,
+    pub tiles: HashMap<u32, SubBitmap>,
 }
 
 /// Platform is a collection of the Allegro core and any initialized addons.
