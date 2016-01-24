@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<map version="1.0" orientation="orthogonal" renderorder="right-down" width="30" height="30" tilewidth="16" tileheight="16" nextobjectid="1">
+ <tileset firstgid="1" name="City" tilewidth="16" tileheight="16" spacing="1">
+  <image source="../city/Spritesheet/roguelikeCity_magenta.png" width="628" height="475"/>
+ </tileset>
+ <layer name="Tile Layer 1" width="30" height="30">
+  <data encoding="base64" compression="zlib">
+   eJztzUENACAMBMEm+LdA8QJ4oajgVFx47GPe01tEmg2Zssw2Ly8vLy8vLy8vLy/vh++RMrvyALoSu7s=
+  </data>
+ </layer>
+</map>
