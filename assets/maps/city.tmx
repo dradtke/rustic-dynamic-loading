@@ -1,11 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<map version="1.0" orientation="orthogonal" renderorder="right-down" width="10" height="10" tilewidth="16" tileheight="16" nextobjectid="1">
+<map version="1.0" orientation="orthogonal" renderorder="right-down" width="40" height="30" tilewidth="16" tileheight="16" nextobjectid="1">
  <tileset firstgid="1" name="City" tilewidth="16" tileheight="16" spacing="1">
   <image source="../city/Spritesheet/roguelikeCity_magenta.png" width="628" height="475"/>
  </tileset>
- <layer name="Tile Layer 1" width="10" height="10">
+ <tileset firstgid="1037" name="Test Tileset" tilewidth="918" tileheight="515">
+  <tile id="0">
+   <image width="918" height="515" source="../city/Sample.png"/>
+  </tile>
+  <tile id="1">
+   <image width="918" height="515" source="../city/Sample.png"/>
+  </tile>
+ </tileset>
+ <layer name="Background" width="40" height="30">
   <data encoding="base64" compression="zlib">
-   eJybx8zAMJ8AXgDEh4H4CAF8lAJ1x6lsHq3VHSdR3QsgfkkAvwJiAFUpTcY=
+   eJzt0rEJgDAQRuHjnMH11V1ULFxE7eIEHkiwSancRV7xSPE3H0m6RqR3rLVWFTn1PpM+22CN1uRYyZe3uULfEtwX/f7wvev7+j/+3Rf9ffHhw4cPHz58+PDhw1ePb7N2x0q+vB3WBfNanFs=
+  </data>
+ </layer>
+ <layer name="Details" width="40" height="30">
+  <data encoding="base64" compression="zlib">
+   eJztzkENACAMBLBLtgT8SwQjKOC9T6ugCQAAzDiV3Jpe/K1Odk8vAIAHc1MB4w==
   </data>
  </layer>
 </map>

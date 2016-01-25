@@ -5,6 +5,7 @@ extern crate tiled;
 
 use allegro::{Bitmap, MemoryBitmap, SharedBitmap, SubBitmap};
 use std::collections::HashMap;
+use std::collections::hash_map::{Entry};
 use std::rc::Rc;
 use std::sync::mpsc::Receiver;
 
@@ -73,21 +74,20 @@ impl TiledMemoryMap {
 		}
 
 		let mut tiles = HashMap::new();
-
-		// TODO: find a more accurate way to make sure all necessary tiles are cached.
-		for gid in 0..1035 {
-			match self.m.get_tileset_by_gid(gid) {
-				Some(tileset) => {
-					let (x, y) = tileset.get_orthogonal_tile_coords(gid).unwrap();
-					let ref image = tileset.images[0];
-					let tile_bmp = bitmaps.get(&image.source).unwrap()
-						.create_sub_bitmap(x as i32, y as i32, tileset.tile_width as i32, tileset.tile_height as i32).unwrap();
-					tiles.insert(gid, tile_bmp);
-					// gid += 1;
-				},
-				None => (),
-			}
-		}
+        for layer in &self.m.layers {
+            for y in 0..layer.tiles.len() {
+                for x in 0..layer.tiles[y].len() {
+                    let gid = layer.tiles[y][x];
+                    if let Entry::Vacant(entry) = tiles.entry(gid) {
+                        if let Some(tileset) = self.m.get_tileset_by_gid(gid) {
+                            let image = &tileset.images[0];
+                            entry.insert(bitmaps.get(&image.source).unwrap()
+                                         .create_sub_bitmap(x as i32, y as i32, tileset.tile_width as i32, tileset.tile_height as i32).unwrap());
+                        }
+                    }
+                }
+            }
+        }
 
 		TiledMap{ m: self.m, bitmaps: bitmaps, tiles: tiles }
 	}
