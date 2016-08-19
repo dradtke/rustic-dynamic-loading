@@ -6,21 +6,14 @@ pub fn update(_: &Platform, _: &mut GameMapDetail) -> Option<State> {
 }
 
 pub fn render(p: &Platform, detail: &GameMapDetail) {
-	for layer in &detail.map.m.layers {
-		// if !layer.visible {
-		// 	continue;
-		// }
-		// TODO: opacity?
+    detail.map.render(p);
+}
 
-		for y in 0..layer.tiles.len() {
-			for x in 0..layer.tiles[y].len() {
-				let gid = layer.tiles[y][x];
-				if let Some(tileset) = detail.map.m.get_tileset_by_gid(gid) {
-				    if let Some(bmp) = detail.map.tiles.get(&gid) {
-                        p.core.draw_bitmap(bmp, (x as u32 * tileset.tile_width) as f32, (y as u32 * tileset.tile_height) as f32, allegro::FLIP_NONE);
-                    }
-                }
-			}
-		}
-	}
+pub fn handle_event(p: &Platform, detail: &GameMapDetail, e: allegro::Event) {
+    match e {
+        allegro::KeyDown{keycode, ..} => {
+            println!("Handling keypress for {}!", p.core.keycode_to_name(keycode));
+        },
+        _ => (),
+    }
 }

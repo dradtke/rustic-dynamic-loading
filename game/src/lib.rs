@@ -34,6 +34,15 @@ pub fn render(p: &Platform, s: &State) {
 }
 
 #[no_mangle]
+#[allow(unused_variables)]
+pub fn handle_event(p: &Platform, s: &State, e: allegro::Event) {
+    match *s {
+        State::GameMap(ref detail) => states::game_map::handle_event(p, detail, e),
+        _ => (),
+    }
+}
+
+#[no_mangle]
 pub fn clean_up(s: State) {
     mem::forget(s);
 }

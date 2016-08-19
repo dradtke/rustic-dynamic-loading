@@ -81,8 +81,17 @@ impl TiledMemoryMap {
                     if let Entry::Vacant(entry) = tiles.entry(gid) {
                         if let Some(tileset) = self.m.get_tileset_by_gid(gid) {
                             let image = &tileset.images[0];
+                            let relative_gid = gid - tileset.first_gid;
+                            let tiles_per_row = ((image.width as u32) + tileset.spacing) / (tileset.tile_width + tileset.spacing);
+                            let ty = relative_gid / tiles_per_row;
+                            let tx = relative_gid - (ty * tiles_per_row);
                             entry.insert(bitmaps.get(&image.source).unwrap()
-                                         .create_sub_bitmap(x as i32, y as i32, tileset.tile_width as i32, tileset.tile_height as i32).unwrap());
+                                         .create_sub_bitmap(
+                                             ((tx * (tileset.tile_width + tileset.spacing)) + tileset.margin) as i32,
+                                             ((ty * (tileset.tile_height + tileset.spacing)) + tileset.margin) as i32,
+                                             tileset.tile_width as i32,
+                                             tileset.tile_height as i32,
+                                         ).unwrap());
                         }
                     }
                 }
@@ -97,6 +106,28 @@ pub struct TiledMap {
 	pub m: tiled::Map,
 	pub bitmaps: HashMap<String, Rc<Bitmap>>,
     pub tiles: HashMap<u32, SubBitmap>,
+}
+
+impl TiledMap {
+	pub fn render(&self, p: &Platform) {
+        for layer in &self.m.layers {
+            if !layer.visible {
+                continue;
+            }
+            // TODO: opacity?
+
+            for y in 0..layer.tiles.len() {
+                for x in 0..layer.tiles[y].len() {
+                    let gid = layer.tiles[y][x];
+                    if let Some(tileset) = self.m.get_tileset_by_gid(gid) {
+                        if let Some(bmp) = self.tiles.get(&gid) {
+                            p.core.draw_bitmap(bmp, (x as u32 * tileset.tile_width) as f32, (y as u32 * tileset.tile_height) as f32, allegro::FLIP_NONE);
+                        }
+                    }
+                }
+            }
+        }
+    }
 }
 
 /// Platform is a collection of the Allegro core and any initialized addons.

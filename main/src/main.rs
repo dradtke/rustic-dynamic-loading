@@ -1,5 +1,3 @@
-#![feature(fs_walk)]
-
 #[macro_use] extern crate allegro;
 extern crate allegro_font;
 extern crate allegro_image;
@@ -11,9 +9,9 @@ use allegro_image::ImageAddon;
 use dylib::DynamicLibrary;
 use state::{State, Platform};
 use std::default::Default;
-use std::fs::{self, DirEntry};
+use std::fs;
 use std::mem;
-use std::os::linux::fs::MetadataExt;
+use std::os::unix::fs::MetadataExt;
 use std::path::{Path, PathBuf};
 
 const FPS:           f64 = 60.0;
@@ -26,6 +24,7 @@ enum Handle {
         #[allow(dead_code)] lib: DynamicLibrary,
         update: fn(&Platform, State) -> State,
         render: fn(&Platform, &State),
+        handle_event: fn(&Platform, &State, allegro::Event),
         clean_up: fn(State),
         inode: u64,
     },
@@ -38,9 +37,10 @@ impl Handle {
             Ok(lib) => Some(Handle::Open{
                 update: unsafe { mem::transmute(lib.symbol::<usize>("update").unwrap()) },
                 render: unsafe { mem::transmute(lib.symbol::<usize>("render").unwrap()) },
+                handle_event: unsafe { mem::transmute(lib.symbol::<usize>("handle_event").unwrap()) },
                 clean_up: unsafe { mem::transmute(lib.symbol::<usize>("clean_up").unwrap()) },
                 lib: lib,
-                inode: fs::metadata(path).unwrap().as_raw_stat().st_ino,
+                inode: fs::metadata(path).unwrap().ino(),
             }),
             Err(..) => None,
         }
@@ -71,6 +71,13 @@ impl Handle {
         }
     }
 
+    fn handle_event(&self, p: &Platform, s: &State, e: allegro::Event) {
+        match *self {
+            Handle::Open{handle_event, ..} => handle_event(p, s, e),
+            Handle::Closed => (),
+        }
+    }
+
     fn clean_up(&self, s: State) {
         match *self {
             Handle::Open{clean_up, ..} => clean_up(s),
@@ -84,18 +91,13 @@ impl Handle {
 // Given the relative path to another Cargo project, this method returns
 // the path to its compiled dynamic library, if found.
 fn find_lib(root: &str) -> Option<PathBuf> {
+    /*
     fn is_dylib(entry: &DirEntry) -> bool {
         entry.path().extension().map(|ext| ext == if cfg!(windows) { "dll" } else { "so" }).unwrap_or(false)
     }
+    */
 
-    let p = Path::new(root).join("target").join("debug");
-    match fs::walk_dir(&p) {
-        Ok(mut iter) => match iter.find(|x| x.as_ref().map(is_dylib).unwrap_or(false)) {
-            Some(f) => Some(Path::new(f.unwrap().path().as_path().to_str().unwrap()).to_path_buf()),
-            None => None,
-        },
-        Err(e) => panic!("failed to walk path {}: {}", p.display(), e),
-    }
+    Some(Path::new(root).join("target").join("debug").join("libgame.dylib").to_path_buf())
 }
 
 allegro_main!
@@ -144,8 +146,8 @@ allegro_main!
                 if match handle {
                     Handle::Open{inode, ..} => match fs::metadata(so.as_path()) {
                         Ok(m) => {
-                            let new_ino = m.as_raw_stat().st_ino;
-                            let new_size = m.as_raw_stat().st_size;
+                            let new_ino = m.ino();
+                            let new_size = m.size();
                             new_ino != inode && new_size > 0
                         },
                         _ => false,
@@ -165,7 +167,7 @@ allegro_main!
                 state = handle.update(&platform, state);
                 redraw = true;
             },
-            _ => (),
+            e => handle.handle_event(&platform, &state, e),
         }
     }
 

@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <map version="1.0" orientation="orthogonal" renderorder="right-down" width="40" height="30" tilewidth="16" tileheight="16" nextobjectid="1">
- <tileset firstgid="1" name="City" tilewidth="16" tileheight="16" spacing="1">
+ <tileset firstgid="1" name="City" tilewidth="16" tileheight="16" spacing="1" tilecount="1036" columns="37">
   <image source="../city/Spritesheet/roguelikeCity_magenta.png" width="628" height="475"/>
  </tileset>
- <tileset firstgid="1037" name="Test Tileset" tilewidth="918" tileheight="515">
+ <tileset firstgid="1037" name="Test Tileset" tilewidth="918" tileheight="515" tilecount="2" columns="0">
   <tile id="0">
    <image width="918" height="515" source="../city/Sample.png"/>
   </tile>
