@@ -7,13 +7,13 @@ authors = ["Damien Radtke <damienradtke@gmail.com>"]
 name = "game"
 crate-type = ["dylib"]
 
-[dependencies.state]
-path = "../state"
-
 [dependencies.allegro]
 version = "=0.0.27"
 
 [dependencies.allegro_font]
+version = "=0.0.27"
+
+[dependencies.allegro_image]
 version = "=0.0.27"
 
 [dependencies.tiled]

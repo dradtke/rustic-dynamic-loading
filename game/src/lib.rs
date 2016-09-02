@@ -1,48 +1,162 @@
 extern crate allegro;
 extern crate allegro_font;
-extern crate state;
+extern crate allegro_image;
 extern crate tiled;
 
 mod states;
-mod util;
 
-use allegro::Color;
-use state::{Platform, State};
+use allegro::{Bitmap, Color, Core, SharedBitmap, SubBitmap};
+use std::collections::HashMap;
+use std::collections::hash_map::Entry;
+use std::fs::File;
 use std::mem;
+use std::rc::Rc;
+use std::path::{Path, PathBuf};
 
 #[no_mangle]
-pub fn update(p: &Platform, mut s: State) -> State {
-    match match s {
-        State::Loading(ref mut detail) => states::loading::update(p, detail),
-        State::GameMap(ref mut detail) => states::game_map::update(p, detail),
-    } {
-        // The old state is technically owned by the main binary, so it needs
-        // to be forgotten here in order to prevent a segfault.
-        Some(x) => { mem::forget(s); x},
-        None => s,
-    }
+pub fn update(p: &Platform, s: State) -> State {
+    s.update(p)
 }
 
 #[no_mangle]
 #[allow(unused_variables)]
 pub fn render(p: &Platform, s: &State) {
     p.core.clear_to_color(Color::from_rgb(0, 0, 0));
-    match *s {
-        State::Loading(ref detail) => states::loading::render(p, detail),
-        State::GameMap(ref detail) => states::game_map::render(p, detail),
-    }
+    s.render(p);
 }
 
 #[no_mangle]
 #[allow(unused_variables)]
-pub fn handle_event(p: &Platform, s: &State, e: allegro::Event) {
-    match *s {
-        State::GameMap(ref detail) => states::game_map::handle_event(p, detail, e),
-        _ => (),
-    }
+pub fn handle_event(p: &Platform, s: State, e: allegro::Event) -> State {
+    s.handle_event(p, e)
 }
 
 #[no_mangle]
 pub fn clean_up(s: State) {
     mem::forget(s);
+}
+
+#[allow(dead_code)]
+pub struct Platform {
+    pub core: allegro::Core,
+    pub font_addon: allegro_font::FontAddon,
+    pub image_addon: allegro_image::ImageAddon,
+}
+
+pub enum State {
+    Loading(states::loading::Loading),
+    Game(states::game::Game),
+}
+
+impl State {
+    pub fn new(p: &Platform) -> State {
+        State::Loading(states::loading::Loading::new(p))
+    }
+
+    fn update(self, p: &Platform) -> State {
+        match self {
+            State::Loading(x) => x.update(p),
+            State::Game(x) => x.update(p),
+        }
+    }
+
+    fn render(&self, p: &Platform) {
+        match *self {
+            State::Loading(ref x) => x.render(p),
+            State::Game(ref x) => x.render(p),
+        }
+    }
+
+    fn handle_event(self, p: &Platform, e: allegro::Event) -> State {
+        match self {
+            State::Loading(x) => State::Loading(x),
+            State::Game(x) => x.handle_event(p, e),
+        }
+    }
+}
+
+pub struct TiledMap {
+	pub m: tiled::Map,
+	pub bitmaps: HashMap<String, Rc<Bitmap>>,
+    pub tiles: HashMap<u32, SubBitmap>,
+}
+
+impl TiledMap {
+    pub fn load<P: AsRef<Path>>(core: &Core, filename: P) -> TiledMap {
+        let f = match File::open(filename.as_ref()) {
+            Ok(f) => f,
+            Err(e) => panic!("failed to open map file: {}", e),
+        };
+        let m = match tiled::parse(f) {
+            Ok(m) => m,
+            Err(e) => panic!("failed to parse map: {}", e),
+        };
+
+        let dir = filename.as_ref().parent().unwrap();
+
+        // Load all of the backing tilesheet images as Allegro memory bitmaps.
+        let mut bitmaps = HashMap::new();
+        for tileset in &m.tilesets {
+            for image in &tileset.images {
+                let mut path = PathBuf::from(dir); path.push(&image.source[..]);
+                let bmp = match Bitmap::load(core, &path.to_string_lossy()) {
+                    Ok(x) => x,
+                    Err(e) => panic!("failed to load bitmap: {:?}", e),
+                };
+                bitmaps.insert(image.source.clone(), Rc::new(bmp));
+            }
+        }
+
+		let mut tiles = HashMap::new();
+        for layer in &m.layers {
+            for y in 0..layer.tiles.len() {
+                for x in 0..layer.tiles[y].len() {
+                    let gid = layer.tiles[y][x];
+                    if let Entry::Vacant(entry) = tiles.entry(gid) {
+                        if let Some(tileset) = m.get_tileset_by_gid(gid) {
+                            let image = &tileset.images[0];
+                            let relative_gid = gid - tileset.first_gid;
+                            let tiles_per_row = ((image.width as u32) + tileset.spacing) / (tileset.tile_width + tileset.spacing);
+                            let ty = relative_gid / tiles_per_row;
+                            let tx = relative_gid - (ty * tiles_per_row);
+                            entry.insert(bitmaps.get(&image.source).unwrap()
+                                         .create_sub_bitmap(
+                                             ((tx * (tileset.tile_width + tileset.spacing)) + tileset.margin) as i32,
+                                             ((ty * (tileset.tile_height + tileset.spacing)) + tileset.margin) as i32,
+                                             tileset.tile_width as i32,
+                                             tileset.tile_height as i32,
+                                         ).unwrap());
+                        }
+                    }
+                }
+            }
+        }
+
+		TiledMap{ m: m, bitmaps: bitmaps, tiles: tiles }
+    }
+
+	pub fn render(&self, p: &Platform, xpos: i32, ypos: i32) {
+        for layer in &self.m.layers {
+            if !layer.visible {
+                continue;
+            }
+            // TODO: opacity?
+
+            for y in 0..layer.tiles.len() {
+                for x in 0..layer.tiles[y].len() {
+                    let gid = layer.tiles[y][x];
+                    if let Some(tileset) = self.m.get_tileset_by_gid(gid) {
+                        if let Some(bmp) = self.tiles.get(&gid) {
+                            p.core.draw_bitmap(
+                                bmp,
+                                ((x as i32 * tileset.tile_width as i32) - xpos) as f32,
+                                ((y as i32 * tileset.tile_height as i32) - ypos) as f32,
+                                allegro::FLIP_NONE,
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
 }

@@ -6,9 +6,6 @@ authors = ["Damien Radtke <damienradtke@gmail.com>"]
 [dependencies.game]
 path = "../game"
 
-[dependencies.state]
-path = "../state"
-
 [dependencies.allegro]
 version = "=0.0.27"
 

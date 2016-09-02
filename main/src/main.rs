@@ -1,14 +1,13 @@
 #[macro_use] extern crate allegro;
 extern crate allegro_font;
 extern crate allegro_image;
-extern crate state;
 extern crate dylib;
+extern crate game;
 
 use allegro_font::FontAddon;
 use allegro_image::ImageAddon;
 use dylib::DynamicLibrary;
-use state::{State, Platform};
-use std::default::Default;
+use game::{State, Platform};
 use std::fs;
 use std::mem;
 use std::os::unix::fs::MetadataExt;
@@ -24,7 +23,7 @@ enum Handle {
         #[allow(dead_code)] lib: DynamicLibrary,
         update: fn(&Platform, State) -> State,
         render: fn(&Platform, &State),
-        handle_event: fn(&Platform, &State, allegro::Event),
+        handle_event: fn(&Platform, State, allegro::Event) -> State,
         clean_up: fn(State),
         inode: u64,
     },
@@ -71,10 +70,10 @@ impl Handle {
         }
     }
 
-    fn handle_event(&self, p: &Platform, s: &State, e: allegro::Event) {
+    fn handle_event(&self, p: &Platform, s: State, e: allegro::Event) -> State {
         match *self {
             Handle::Open{handle_event, ..} => handle_event(p, s, e),
-            Handle::Closed => (),
+            Handle::Closed => s,
         }
     }
 
@@ -121,7 +120,7 @@ allegro_main!
     };
 
     let mut handle = Handle::open(so.as_path()).unwrap();
-    let mut state = Default::default();
+    let mut state = game::State::new(&platform);
 
     let timer = allegro::Timer::new(&platform.core, 1.0 / FPS).unwrap();
     let q = allegro::EventQueue::new(&platform.core).unwrap();
@@ -167,7 +166,9 @@ allegro_main!
                 state = handle.update(&platform, state);
                 redraw = true;
             },
-            e => handle.handle_event(&platform, &state, e),
+            e => {
+                state = handle.handle_event(&platform, state, e);
+            },
         }
     }
 
