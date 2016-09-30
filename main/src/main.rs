@@ -1,103 +1,56 @@
 #[macro_use] extern crate allegro;
 extern crate allegro_font;
 extern crate allegro_image;
-extern crate dylib;
+extern crate libloading;
 extern crate game;
 
 use allegro_font::FontAddon;
 use allegro_image::ImageAddon;
-use dylib::DynamicLibrary;
+use libloading::Library;
 use game::{State, Platform};
 use std::fs;
-use std::mem;
-use std::os::unix::fs::MetadataExt;
-use std::path::{Path, PathBuf};
 
 const FPS:           f64 = 60.0;
 const SCREEN_WIDTH:  i32 = 640;
 const SCREEN_HEIGHT: i32 = 480;
 
-/// A reference to the game's shared library.
-enum Handle {
-    Open {
-        #[allow(dead_code)] lib: DynamicLibrary,
-        update: fn(&Platform, State) -> State,
-        render: fn(&Platform, &State),
-        handle_event: fn(&Platform, State, allegro::Event) -> State,
-        clean_up: fn(State),
-        inode: u64,
-    },
-    Closed,
-}
+struct Application(Library);
 
-impl Handle {
-    fn open(path: &Path) -> Option<Handle> {
-        match DynamicLibrary::open(Some(path)) {
-            Ok(lib) => Some(Handle::Open{
-                update: unsafe { mem::transmute(lib.symbol::<usize>("update").unwrap()) },
-                render: unsafe { mem::transmute(lib.symbol::<usize>("render").unwrap()) },
-                handle_event: unsafe { mem::transmute(lib.symbol::<usize>("handle_event").unwrap()) },
-                clean_up: unsafe { mem::transmute(lib.symbol::<usize>("clean_up").unwrap()) },
-                lib: lib,
-                inode: fs::metadata(path).unwrap().ino(),
-            }),
-            Err(..) => None,
-        }
-    }
-
-    fn is_closed(&self) -> bool {
-        match *self {
-            Handle::Open{..} => false,
-            Handle::Closed => true,
-        }
-    }
-
-    fn close(&mut self) {
-        *self = Handle::Closed;
-    }
-
+impl Application {
     fn update(&self, p: &Platform, s: State) -> State {
-        match *self {
-            Handle::Open{update, ..} => update(p, s),
-            Handle::Closed => s,
+        unsafe {
+            let f = self.0.get::<fn(&Platform, State) -> State>(b"update\0")
+                .unwrap_or_else(|error| panic!("failed to get symbol `update`: {}", error));
+            f(p, s)
         }
     }
 
     fn render(&self, p: &Platform, s: &State) {
-        match *self {
-            Handle::Open{render, ..} => render(p, s),
-            Handle::Closed => (),
+        unsafe {
+            let f = self.0.get::<fn(&Platform, &State)>(b"render\0")
+                .unwrap_or_else(|error| panic!("failed to get symbol `render`: {}", error));
+            f(p, s)
         }
     }
 
     fn handle_event(&self, p: &Platform, s: State, e: allegro::Event) -> State {
-        match *self {
-            Handle::Open{handle_event, ..} => handle_event(p, s, e),
-            Handle::Closed => s,
+        unsafe {
+            let f = self.0.get::<fn(&Platform, State, allegro::Event) -> State>(b"handle_event\0")
+                .unwrap_or_else(|error| panic!("failed to get symbol `handle_event`: {}", error));
+            f(p, s, e)
         }
     }
 
     fn clean_up(&self, s: State) {
-        match *self {
-            Handle::Open{clean_up, ..} => clean_up(s),
-            Handle::Closed => (),
+        unsafe {
+            let f = self.0.get::<fn(State)>(b"clean_up\0")
+                .unwrap_or_else(|error| panic!("failed to get symbol `clean_up`: {}", error));
+            f(s)
         }
     }
 }
 
-// Find the compiled dynamic library for a Cargo project.
-//
-// Given the relative path to another Cargo project, this method returns
-// the path to its compiled dynamic library, if found.
-fn find_lib(root: &str) -> Option<PathBuf> {
-    /*
-    fn is_dylib(entry: &DirEntry) -> bool {
-        entry.path().extension().map(|ext| ext == if cfg!(windows) { "dll" } else { "so" }).unwrap_or(false)
-    }
-    */
-
-    Some(Path::new(root).join("target").join("debug").join("libgame.dylib").to_path_buf())
-}
+const LIB_PATH: &'static str = "../game/target/debug/libgame.dylib";
 
 allegro_main!
 {
@@ -114,12 +67,8 @@ allegro_main!
     platform.core.install_keyboard().unwrap();
     platform.core.install_mouse().unwrap();
 
-    let so = match find_lib("../game") {
-        Some(so) => so,
-        None => panic!("no shared library found!"),
-    };
-
-    let mut handle = Handle::open(so.as_path()).unwrap();
+    let mut app = Application(Library::new(LIB_PATH).unwrap());
+    let mut last_modified = fs::metadata(LIB_PATH).unwrap().modified().unwrap();
     let mut state = game::State::new(&platform);
 
     let timer = allegro::Timer::new(&platform.core, 1.0 / FPS).unwrap();
@@ -134,7 +83,7 @@ allegro_main!
 
     'main: loop {
         if redraw && q.is_empty() {
-            handle.render(&platform, &state);
+            app.render(&platform, &state);
             platform.core.flip_display();
             redraw = false;
         }
@@ -142,35 +91,25 @@ allegro_main!
         match q.wait_for_event() {
             allegro::DisplayClose{..} => break 'main,
             allegro::TimerTick{..} => {
-                if match handle {
-                    Handle::Open{inode, ..} => match fs::metadata(so.as_path()) {
-                        Ok(m) => {
-                            let new_ino = m.ino();
-                            let new_size = m.size();
-                            new_ino != inode && new_size > 0
-                        },
-                        _ => false,
-                    },
-                    _ => false,
-                } {
-                    println!("reloading");
-                    handle.close();
+                if let Ok(Ok(modified)) = fs::metadata(LIB_PATH).map(|m| m.modified()) {
+                    if modified > last_modified {
+                        drop(app);
+                        app = Application(Library::new(LIB_PATH)
+                                          .unwrap_or_else(|error| panic!("{}", error)));
+                        last_modified = modified;
+                    }
                 }
-
-                if handle.is_closed() {
-                    match Handle::open(&Path::new(so.as_path())) {
-                        Some(h) => handle = h,
-                        _ => (),
-                    };
-                }
-                state = handle.update(&platform, state);
+                state = app.update(&platform, state);
                 redraw = true;
             },
             e => {
-                state = handle.handle_event(&platform, state, e);
+                state = app.handle_event(&platform, state, e);
             },
         }
     }
 
-    handle.clean_up(state);
+    println!("Cleaning up...");
+    app.clean_up(state);
+    //mem::forget(state);
+    println!("Bye!");
 }

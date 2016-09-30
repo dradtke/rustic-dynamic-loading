@@ -52,8 +52,17 @@ impl Game {
         ::State::Game(self)
     }
 
+    pub fn clean_up(&mut self) {
+    }
+
     fn do_map_reload(&mut self, p: &::Platform) {
         println!("reloading map");
         self.map = ::TiledMap::load(&p.core, "../assets/maps/city.tmx");
+    }
+}
+
+impl Drop for Game {
+    fn drop(&mut self) {
+        println!("Dropping Game state");
     }
 }

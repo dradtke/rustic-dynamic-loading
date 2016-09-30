@@ -16,7 +16,7 @@
    eJzt0rEJgDAQRuHjnMH11V1ULFxE7eIEHkiwSancRV7xSPE3H0m6RqR3rLVWFTn1PpM+22CN1uRYyZe3uULfEtwX/f7wvev7+j/+3Rf9ffHhw4cPHz58+PDhw1ePb7N2x0q+vB3WBfNanFs=
   </data>
  </layer>
- <layer name="Details" width="40" height="30">
+ <layer name="Details" width="40" height="30" opacity="0.75">
   <data encoding="base64" compression="zlib">
    eJztzkENACAMBLBLtgT8SwQjKOC9T6ugCQAAzDiV3Jpe/K1Odk8vAIAHc1MB4w==
   </data>

@@ -32,7 +32,8 @@ pub fn handle_event(p: &Platform, s: State, e: allegro::Event) -> State {
 }
 
 #[no_mangle]
-pub fn clean_up(s: State) {
+pub fn clean_up(mut s: State) {
+    s.clean_up();
     mem::forget(s);
 }
 
@@ -71,6 +72,13 @@ impl State {
         match self {
             State::Loading(x) => State::Loading(x),
             State::Game(x) => x.handle_event(p, e),
+        }
+    }
+
+    fn clean_up(&mut self) {
+        match *self {
+            State::Loading(_) => (),
+            State::Game(ref mut x) => { x.clean_up(); mem::forget(x) },
         }
     }
 }
@@ -135,28 +143,34 @@ impl TiledMap {
 		TiledMap{ m: m, bitmaps: bitmaps, tiles: tiles }
     }
 
-	pub fn render(&self, p: &Platform, xpos: i32, ypos: i32) {
+	pub fn render(&self, p: &Platform, dx: i32, dy: i32) {
         for layer in &self.m.layers {
             if !layer.visible {
                 continue;
             }
-            // TODO: opacity?
 
-            for y in 0..layer.tiles.len() {
-                for x in 0..layer.tiles[y].len() {
-                    let gid = layer.tiles[y][x];
+            for ty in 0..layer.tiles.len() {
+                for tx in 0..layer.tiles[ty].len() {
+                    let gid = layer.tiles[ty][tx];
                     if let Some(tileset) = self.m.get_tileset_by_gid(gid) {
                         if let Some(bmp) = self.tiles.get(&gid) {
-                            p.core.draw_bitmap(
-                                bmp,
-                                ((x as i32 * tileset.tile_width as i32) - xpos) as f32,
-                                ((y as i32 * tileset.tile_height as i32) - ypos) as f32,
-                                allegro::FLIP_NONE,
-                            );
+                            let x = ((tx as i32 * tileset.tile_width as i32) - dx) as f32;
+                            let y = ((ty as i32 * tileset.tile_height as i32) - dy) as f32;
+                            if layer.opacity == 1.00 {
+                                p.core.draw_bitmap(bmp, x, y, allegro::FLIP_NONE);
+                            } else {
+                                p.core.draw_tinted_bitmap(bmp, Color::from_rgba_f(layer.opacity, layer.opacity, layer.opacity, layer.opacity), x, y, allegro::FLIP_NONE);
+                            }
                         }
                     }
                 }
             }
         }
+    }
+}
+
+impl Drop for TiledMap {
+    fn drop(&mut self) {
+        println!("Dropping a map");
     }
 }
